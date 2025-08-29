@@ -1,0 +1,25 @@
+{
+  "name": "yuvi-bot",
+  "version": "1.0.0",
+  "description": "Discord bot with embed description extraction commands",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^17.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "embed"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
