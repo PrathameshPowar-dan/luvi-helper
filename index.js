@@ -26,38 +26,39 @@ client.on('messageCreate', async (message) => {
       message.reference.messageId
     );
 
+    // Only process if from the target bot
     if (referencedMessage.author.id !== '1269481871021047891') return;
-    if (!referencedMessage.embeds || referencedMessage.embeds.length === 0) return;
 
+    // Ignore forwarded or plain messages (require embeds with fields)
+    if (!referencedMessage.embeds || referencedMessage.embeds.length === 0) return;
     const embed = referencedMessage.embeds[0];
+    if (!embed.fields || embed.fields.length === 0) return;
+
     const cmd = message.content.toLowerCase();
 
     if (cmd === 'l.id') {
       const ids = extractIds(embed);
-      const botReply = await message.reply(
-        ids.length > 0 ? `IDs: ${ids.join(', ')}` : '❌ No IDs found in the embed fields.'
-      );
+      if (ids.length === 0) return; // no reply if no IDs
+      const botReply = await message.reply(`IDs: ${ids.join(', ')}`);
       trackedReplies.set(referencedMessage.id, { botReply, type: 'id' });
     }
 
     if (cmd === 'l.code') {
       const codes = extractCodes(embed);
-      const botReply = await message.reply(
-        codes.length > 0 ? `Codes: ${codes.join(', ')}` : '❌ No codes found in the embed fields.'
-      );
+      if (codes.length === 0) return; // no reply if no Codes
+      const botReply = await message.reply(`Codes: ${codes.join(', ')}`);
       trackedReplies.set(referencedMessage.id, { botReply, type: 'code' });
     }
 
     if (cmd === 'l.name') {
       const names = extractNames(embed);
-      const botReply = await message.reply(
-        names.length > 0 ? `Names: ${names.join(', ')}` : '❌ No names found in the embed fields.'
-      );
+      if (names.length === 0) return; // no reply if no Names
+      const botReply = await message.reply(`Names: ${names.join(', ')}`);
       trackedReplies.set(referencedMessage.id, { botReply, type: 'name' });
     }
   } catch (error) {
     console.error('Error processing message:', error);
-    await message.reply('❌ An error occurred while processing the command.');
+    // Silent fail: don't reply with ❌ anymore
   }
 });
 
@@ -75,11 +76,9 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
     if (tracked.type === 'id') {
       updatedValues = extractIds(embed);
     }
-
     if (tracked.type === 'code') {
       updatedValues = extractCodes(embed);
     }
-
     if (tracked.type === 'name') {
       updatedValues = extractNames(embed);
     }
