@@ -29,7 +29,7 @@ client.on('messageCreate', async (message) => {
     // Only process if from the target bot
     if (referencedMessage.author.id !== '1269481871021047891') return;
 
-    // Ignore forwarded or plain messages (require embeds with fields)
+    // Require embeds with fields
     if (!referencedMessage.embeds || referencedMessage.embeds.length === 0) return;
     const embed = referencedMessage.embeds[0];
     if (!embed.fields || embed.fields.length === 0) return;
@@ -38,27 +38,33 @@ client.on('messageCreate', async (message) => {
 
     if (cmd === 'l.id') {
       const ids = extractIds(embed);
-      if (ids.length === 0) return; // no reply if no IDs
+      if (ids.length === 0) return;
       const botReply = await message.reply(`IDs: ${ids.join(', ')}`);
       trackedReplies.set(referencedMessage.id, { botReply, type: 'id' });
     }
 
     if (cmd === 'l.code') {
       const codes = extractCodes(embed);
-      if (codes.length === 0) return; // no reply if no Codes
+      if (codes.length === 0) return;
       const botReply = await message.reply(`Codes: ${codes.join(', ')}`);
       trackedReplies.set(referencedMessage.id, { botReply, type: 'code' });
     }
 
     if (cmd === 'l.name') {
-      const names = extractNames(embed);
-      if (names.length === 0) return; // no reply if no Names
+      const names = extractNames(embed, false); // exclude iconic
+      if (names.length === 0) return;
       const botReply = await message.reply(`Names: ${names.join(', ')}`);
       trackedReplies.set(referencedMessage.id, { botReply, type: 'name' });
     }
+
+    if (cmd === 'l.ico') {
+      const iconic = extractNames(embed, true); // only iconic
+      if (iconic.length === 0) return;
+      const botReply = await message.reply(`Iconic: ${iconic.join(', ')}`);
+      trackedReplies.set(referencedMessage.id, { botReply, type: 'ico' });
+    }
   } catch (error) {
     console.error('Error processing message:', error);
-    // Silent fail: don't reply with ❌ anymore
   }
 });
 
@@ -80,7 +86,10 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
       updatedValues = extractCodes(embed);
     }
     if (tracked.type === 'name') {
-      updatedValues = extractNames(embed);
+      updatedValues = extractNames(embed, false);
+    }
+    if (tracked.type === 'ico') {
+      updatedValues = extractNames(embed, true);
     }
 
     if (updatedValues.length === 0) return;
@@ -94,7 +103,9 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
 
     const label =
       tracked.type === 'id' ? 'IDs' :
-      tracked.type === 'code' ? 'Codes' : 'Names';
+        tracked.type === 'code' ? 'Codes' :
+          tracked.type === 'name' ? 'Names' :
+            'Iconic';
 
     await tracked.botReply.edit(`${label}: ${merged.join(', ')}`);
   } catch (err) {
@@ -124,21 +135,31 @@ function extractCodes(embed) {
   return codes;
 }
 
-function extractNames(embed) {
+function extractNames(embed, onlyIconic = false) {
   const names = [];
   if (embed.fields) {
     embed.fields.forEach((field) => {
       if (field.name) {
-        const cleanName = field.name
-          .replace(/:[^:]+:/g, '')
-          .replace(/<[^>]+>/g, '')
+        let cleanName = field.name
+          .replace(/:[^:]+:/g, '')   // remove emojis
+          .replace(/<[^>]+>/g, '')   // remove mentions
           .trim();
-        if (cleanName) names.push(cleanName);
+
+        const isIconic = /(\|\s*\*{0,2}Iconic\*{0,2})/i.test(cleanName);
+
+        if (onlyIconic && isIconic) {
+          // Remove the "| Iconic" part before pushing
+          cleanName = cleanName.replace(/\|\s*\*{0,2}Iconic\*{0,2}/i, '').trim();
+          names.push(cleanName);
+        } else if (!onlyIconic && !isIconic && cleanName) {
+          names.push(cleanName);
+        }
       }
     });
   }
   return names;
 }
+
 
 client.on('error', (error) => {
   console.error('Discord client error:', error);
