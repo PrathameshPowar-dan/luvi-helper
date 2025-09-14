@@ -40,28 +40,28 @@ client.on('messageCreate', async (message) => {
       const ids = extractIds(embed);
       if (ids.length === 0) return;
       const botReply = await message.reply(`IDs: ${ids.join(', ')}`);
-      trackedReplies.set(referencedMessage.id, { botReply, type: 'id' });
+      trackedReplies.set(referencedMessage.id, { botReply, type: 'id', data: {} });
     }
 
     if (cmd === 'l.code') {
       const codes = extractCodes(embed);
       if (codes.length === 0) return;
       const botReply = await message.reply(`Codes: ${codes.join(', ')}`);
-      trackedReplies.set(referencedMessage.id, { botReply, type: 'code' });
+      trackedReplies.set(referencedMessage.id, { botReply, type: 'code', data: {} });
     }
 
     if (cmd === 'l.name') {
-      const names = extractNames(embed, false); // exclude iconic
+      const names = extractNames(embed, false);
       if (names.length === 0) return;
-      const botReply = await message.reply(`Names: ${names.join(', ')}`);
-      trackedReplies.set(referencedMessage.id, { botReply, type: 'name' });
+      const botReply = await message.reply(`Names: ${formatWithCounts(names)}`);
+      trackedReplies.set(referencedMessage.id, { botReply, type: 'name', data: countItems(names) });
     }
 
     if (cmd === 'l.ico') {
-      const iconic = extractNames(embed, true); // only iconic
+      const iconic = extractNames(embed, true);
       if (iconic.length === 0) return;
-      const botReply = await message.reply(`Iconic: ${iconic.join(', ')}`);
-      trackedReplies.set(referencedMessage.id, { botReply, type: 'ico' });
+      const botReply = await message.reply(`Iconic: ${formatWithCounts(iconic)}`);
+      trackedReplies.set(referencedMessage.id, { botReply, type: 'ico', data: countItems(iconic) });
     }
   } catch (error) {
     console.error('Error processing message:', error);
@@ -94,12 +94,15 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
 
     if (updatedValues.length === 0) return;
 
-    const existingValues = tracked.botReply.content
-      .replace(/^.*?:\s*/, '')
-      .split(', ')
-      .filter(v => v.trim() !== '' && !v.startsWith('❌'));
+    // Merge counts instead of just unique values
+    const existingCounts = tracked.data || {};
+    const newCounts = countItems(updatedValues);
 
-    const merged = [...new Set([...existingValues, ...updatedValues])];
+    for (const [name, count] of Object.entries(newCounts)) {
+      existingCounts[name] = (existingCounts[name] || 0) + count;
+    }
+
+    tracked.data = existingCounts;
 
     const label =
       tracked.type === 'id' ? 'IDs' :
@@ -107,11 +110,13 @@ client.on('messageUpdate', async (oldMsg, newMsg) => {
           tracked.type === 'name' ? 'Names' :
             'Iconic';
 
-    await tracked.botReply.edit(`${label}: ${merged.join(', ')}`);
+    await tracked.botReply.edit(`${label}: ${formatWithCountsFromMap(existingCounts)}`);
   } catch (err) {
     console.error('Error handling messageUpdate:', err);
   }
 });
+
+// ===== Utility Functions =====
 
 function extractIds(embed) {
   const ids = [];
@@ -141,14 +146,15 @@ function extractNames(embed, onlyIconic = false) {
     embed.fields.forEach((field) => {
       if (field.name) {
         let cleanName = field.name
-          .replace(/:[^:]+:/g, '')   // remove emojis
+          .replace(/:[^:]+:/g, '')   // remove custom Discord emoji <:emoji:123>
           .replace(/<[^>]+>/g, '')   // remove mentions
+          .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '') // remove unicode emojis
+          .replace(/\s+/g, ' ')      // collapse multiple spaces
           .trim();
 
         const isIconic = /(\|\s*\*{0,2}Iconic\*{0,2})/i.test(cleanName);
 
         if (onlyIconic && isIconic) {
-          // Remove the "| Iconic" part before pushing
           cleanName = cleanName.replace(/\|\s*\*{0,2}Iconic\*{0,2}/i, '').trim();
           names.push(cleanName);
         } else if (!onlyIconic && !isIconic && cleanName) {
@@ -160,6 +166,24 @@ function extractNames(embed, onlyIconic = false) {
   return names;
 }
 
+function countItems(arr) {
+  const counts = {};
+  arr.forEach(name => {
+    counts[name] = (counts[name] || 0) + 1;
+  });
+  return counts;
+}
+
+function formatWithCounts(arr) {
+  const counts = countItems(arr);
+  return formatWithCountsFromMap(counts);
+}
+
+function formatWithCountsFromMap(counts) {
+  return Object.entries(counts)
+    .map(([name, count]) => (count > 1 ? `${name} x${count}` : name))
+    .join(', ');
+}
 
 client.on('error', (error) => {
   console.error('Discord client error:', error);
